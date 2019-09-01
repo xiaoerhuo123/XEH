@@ -1,0 +1,75 @@
+#!/usr/bin/env python
+# encoding: utf-8
+
+"""
+@author: XEH
+@software: PyCharm
+@time: 9/1/19 15：15
+@description：获取国家彩票单关数据
+"""
+#导入相关的库
+import time
+import urllib.request as ur
+import re
+import numpy as np
+import pandas as pd
+import random
+start_date = input("please input start time: ")  #输入起始时间2019-08-01
+end_date = input("please input end date: ")      #输入截至时间2019-08-02
+#ua池
+uapools = [
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/73.0.3683.103 Safari/537.36"
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/64.0.3282.140 Safari/537.36 Edge/17.17134"
+    "Mozilla/5.0 (Windows; U; Windows NT 6.1; en-us) AppleWebKit/534.50 (KHTML, like Gecko) Version/5.1 Safari/534.50"
+    "Mozilla/4.0 (compatible; MSIE 7.0; Windows NT 5.1; Maxthon 2.0)"
+    ]
+def ua(uapools):
+    thisua = random.choice(uapools)
+    # print(thisua)
+    headers = ("User-Agent",thisua)
+    opener = ur.build_opener()
+    opener.addheaders = [headers]
+    # 安装为全局
+    ur.install_opener(opener)
+#相关的网址
+url = "https://info.sporttery.cn/football/match_result.php?&search_league=0&start_date=" + start_date + "&end_date=" + end_date + "&dan=1"
+data1 = ur.urlopen(url).read().decode("utf-8", "ignore")
+pat1 = 'class="u-fl">.*?<span class="u-org">(.*?)</span>'
+pat2 = '<span class="u-org" style="font-weight:bold; font-size:13px;">(.*?)</span>'#获取全场比分
+pat3 = '<td width="55"><span.*?>(.*?)</span></td>'#获取赔率
+pat4 = '<span class="blue">(.*?)</span>' #获取半场比分
+pat5 = '<td width="101">(.*?)</td>' #获取日期
+list = re.compile(pat1).findall(data1)
+Count = eval(list[0])
+Half_Score_List = []
+Whole_Score_List = []
+Price_List = []
+Date_List = []
+if Count%30 == 0:
+    Page = int(Count/30)
+else:
+    Page = int(Count/30 + 1)
+for i in range(1,Page+1):
+    ua(uapools)
+    url1 = "https://info.sporttery.cn/football/match_result.php?page="+ str(i) + "&search_league=0&start_date=" + start_date + "&end_date=" + end_date + "&dan=1"
+    data2 = ur.urlopen(url1).read().decode("utf-8","ignore")
+    HalfScore = re.compile(pat4).findall(data2)
+    Half_Score_List.extend(HalfScore)
+    WholeScore = re.compile(pat2).findall(data2)
+    Whole_Score_List.extend(WholeScore)
+    Price = re.compile(pat3).findall(data2)
+    Price_List.extend(Price)
+    Date = re.compile(pat5).findall(data2)
+    Date_List.extend(Date)
+    a = np.array(Price_List).reshape(len(Whole_Score_List),3)
+    b = np.array(Whole_Score_List).reshape(len(Whole_Score_List),1)
+    c = np.array(Half_Score_List).reshape(len(Whole_Score_List),1)
+    d = np.array(Date_List).reshape(len(Date_List),1)
+    e = np.hstack((d,c,b,a))
+df = pd.DataFrame(e)
+df.columns = ['a','b','c', 'd', 'e','f']
+df1 = df[-df.c.isin(['--'])]
+df1.columns = ['DATE','HALF_SCORE','SCORE','HOST_WIN','DOG_FALL','GUEST_WIN']
+df1 = df1[ ~ df1['HOST_WIN'].str.contains('--')]
+# print(df1)
+df1.to_excel("2019.xlsx",encoding="utf-8",index=False)
